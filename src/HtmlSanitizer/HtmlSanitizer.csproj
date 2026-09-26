@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<Description>Cleans HTML from constructs that can be used for cross-site scripting (XSS)</Description>
+		<Copyright>Copyright 2013-$([System.DateTime]::Now.Year) Michael Ganss</Copyright>
+		<AssemblyTitle>HtmlSanitizer</AssemblyTitle>
+		<AppVeyor_Build_Version Condition="'$(APPVEYOR_BUILD_VERSION)' == ''">1.0.0</AppVeyor_Build_Version>
+		<AssemblyVersion>10.0.0.0</AssemblyVersion>
+		<InformationalVersion>$(AppVeyor_Build_Version)</InformationalVersion>
+		<FileVersion>$(AppVeyor_Build_Version).0</FileVersion>
+		<PackageVersion>$(AppVeyor_Build_Version)</PackageVersion>
+		<Authors>Michael Ganss</Authors>
+		<TargetFrameworks>net462;net47;netstandard2.0;net8.0</TargetFrameworks>
+		<AssemblyName>HtmlSanitizer</AssemblyName>
+		<AssemblyOriginatorKeyFile>HtmlSanitizer.snk</AssemblyOriginatorKeyFile>
+		<SignAssembly>true</SignAssembly>
+		<PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>
+		<PackageId>HtmlSanitizer</PackageId>
+		<PackageTags>xss;anti;antixss;html;security</PackageTags>
+		<PackageProjectUrl>https://github.com/mganss/HtmlSanitizer</PackageProjectUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryType>git</RepositoryType>
+		<RepositoryUrl>git://github.com/mganss/HtmlSanitizer</RepositoryUrl>
+		<RootNamespace>Ganss.Xss</RootNamespace>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\HtmlSanitizer.xml</DocumentationFile>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<LangVersion>preview</LangVersion>
+		<Nullable>enable</Nullable>
+		<WarningsAsErrors>nullable</WarningsAsErrors>
+		<NoWarn>$(NoWarn);IDE0130;SYSLIB1045;CA1510</NoWarn>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(CI)' == 'True'">
+		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="AngleSharp" Version="1.8.2" />
+		<PackageReference Include="AngleSharp.Css" Version="1.1.2" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.401" PrivateAssets="All" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net462' Or '$(TargetFramework)' == 'net47' Or '$(TargetFramework)' == 'netstandard2.0'">
+		<PackageReference Include="System.Collections.Immutable" Version="10.0.12" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+		<PackageReference Include="System.ValueTuple" Version="4.6.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="../../README.md" Pack="true" PackagePath="" />
+	</ItemGroup>
+
+</Project>
