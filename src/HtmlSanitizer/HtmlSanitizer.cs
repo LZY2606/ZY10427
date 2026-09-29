@@ -42,6 +42,14 @@ namespace Ganss.Xss;
 /// <item>You can specify the HTML attributes that contain URIs (such as "src", "href" etc.) through the property <see cref="UriAttributes"/>.</item>
 /// </list>
 /// </para>
+/// <para>
+/// The configuration stays mutable between calls, but a single sanitize call does not observe it
+/// changing underneath itself: every public sanitize method captures an immutable snapshot of the
+/// sets, options, formatters, factories and event handlers on entry (see <see cref="SanitizerPolicy"/>)
+/// and the traversal reads only that snapshot. A mutation made from another thread while a call is
+/// in flight therefore never produces a half-old, half-new outcome - the call finishes on the
+/// version it started with, and the change takes effect from the next call.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -137,6 +145,52 @@ public class HtmlSanitizer : IHtmlSanitizer
         AllowCssCustomProperties = options.AllowCssCustomProperties;
         AllowDataAttributes = options.AllowDataAttributes;
     }
+
+    /// <summary>
+    /// Captures everything a sanitize call reads from this instance into an immutable
+    /// <see cref="SanitizerPolicy"/> snapshot. Called once on entry by every public sanitize
+    /// method; the traversal then reads only the snapshot, so a call always observes one
+    /// consistent version of the configuration even if another thread mutates this sanitizer
+    /// while the call is in flight.
+    /// </summary>
+    /// <remarks>
+    /// Reading an event field yields the current handler list as a single delegate reference,
+    /// so a handler added or removed after this point neither joins nor leaves the call in
+    /// progress. The snapshot is not kept anywhere: it dies with the call, which is what keeps
+    /// replaced handlers and other user delegates collectible and prevents any accumulation
+    /// over repeated calls.
+    /// </remarks>
+    /// <returns>The snapshot of the current configuration.</returns>
+    private SanitizerPolicy CapturePolicy() => new()
+    {
+        AllowedTags = SanitizerPolicy.Copy(AllowedTags),
+        AllowedSchemes = SanitizerPolicy.Copy(AllowedSchemes),
+        AllowedAttributes = SanitizerPolicy.Copy(AllowedAttributes),
+        UriAttributes = SanitizerPolicy.Copy(UriAttributes),
+        UriListAttributes = SanitizerPolicy.Copy(UriListAttributes),
+        AllowedCssProperties = SanitizerPolicy.Copy(AllowedCssProperties),
+        AllowedClasses = SanitizerPolicy.Copy(AllowedClasses),
+        AllowedAtRules = SanitizerPolicy.Copy(AllowedAtRules),
+        AllowDataAttributes = AllowDataAttributes,
+        AllowCssCustomProperties = AllowCssCustomProperties,
+        KeepChildNodes = KeepChildNodes,
+        DisallowCssPropertyValue = DisallowCssPropertyValue,
+        EncodeComment = EncodeComment,
+        EncodeLiteralTextElementContent = EncodeLiteralTextElementContent,
+        HtmlParserFactory = HtmlParserFactory,
+        OutputFormatter = OutputFormatter,
+        StyleFormatter = StyleFormatter,
+        PostProcessDom = PostProcessDom,
+        PostProcessNode = PostProcessNode,
+        RemovingTag = RemovingTag,
+        RemovingAttribute = RemovingAttribute,
+        RemovingStyle = RemovingStyle,
+        RemovingAtRule = RemovingAtRule,
+        RemovingComment = RemovingComment,
+        RemovingCssClass = RemovingCssClass,
+        FilterUrl = FilterUrl,
+        FilterCssRule = FilterCssRule,
+    };
 
     /// <summary>
     /// Gets or sets the default <see cref="Action{IComment}"/> method that encodes comments.
@@ -319,6 +373,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:PostProcessDom" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="PostProcessDomEventArgs"/> instance containing the event data.</param>
     protected virtual void OnPostProcessDom(PostProcessDomEventArgs e)
     {
@@ -328,6 +387,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:PostProcessNode" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="PostProcessNodeEventArgs"/> instance containing the event data.</param>
     protected virtual void OnPostProcessNode(PostProcessNodeEventArgs e)
     {
@@ -337,6 +401,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingTag" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingTagEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingTag(RemovingTagEventArgs e)
     {
@@ -346,6 +415,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingAttribute" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingAttributeEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingAttribute(RemovingAttributeEventArgs e)
     {
@@ -355,6 +429,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingStyle" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingStyleEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingStyle(RemovingStyleEventArgs e)
     {
@@ -364,6 +443,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingAtRule" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingAtRuleEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingAtRule(RemovingAtRuleEventArgs e)
     {
@@ -373,6 +457,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingComment" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingCommentEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingComment(RemovingCommentEventArgs e)
     {
@@ -387,6 +476,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:RemovingCSSClass" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="RemovingCssClassEventArgs"/> instance containing the event data.</param>
     protected virtual void OnRemovingCssClass(RemovingCssClassEventArgs e)
     {
@@ -396,6 +490,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:FilterUrl" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="FilterUrlEventArgs"/> instance containing the event data.</param>
     protected virtual void OnFilteringUrl(FilterUrlEventArgs e)
     {
@@ -405,6 +504,11 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Raises the <see cref="E:FilterCssRule" /> event.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline raises the handler list captured in the call's policy snapshot
+    /// rather than going through this method, so a call always observes one consistent set of
+    /// handlers. This method remains for subclasses that raise the event themselves.
+    /// </remarks>
     /// <param name="e">The <see cref="FilterCssRuleEventArgs"/> instance containing the event data.</param>
     /// <returns>True if the CSS rule should be kept; otherwise, false.</returns>
     protected virtual bool OnFilteringCssRule(FilterCssRuleEventArgs e)
@@ -449,9 +553,10 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <returns>The sanitized HTML body fragment.</returns>
     public string Sanitize(string html, string baseUrl = "", IMarkupFormatter? outputFormatter = null)
     {
-        using var dom = SanitizeDom(html, baseUrl);
+        var policy = CapturePolicy();
+        using var dom = SanitizeDom(policy, html, baseUrl);
         if (dom.Body == null) return string.Empty;
-        var output = dom.Body.ChildNodes.ToHtml(outputFormatter ?? OutputFormatter);
+        var output = dom.Body.ChildNodes.ToHtml(outputFormatter ?? policy.OutputFormatter);
 
         return output;
     }
@@ -462,9 +567,19 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <param name="html">The HTML body fragment to sanitize.</param>
     /// <param name="baseUrl">The base URL relative URLs are resolved against. No resolution if empty.</param>
     /// <returns>The sanitized HTML document.</returns>
-    public IHtmlDocument SanitizeDom(string html, string baseUrl = "")
+    public IHtmlDocument SanitizeDom(string html, string baseUrl = "") =>
+        SanitizeDom(CapturePolicy(), html, baseUrl);
+
+    /// <summary>
+    /// Sanitizes the specified HTML body fragment under the given policy snapshot.
+    /// </summary>
+    /// <param name="policy">The snapshot captured when the call was entered.</param>
+    /// <param name="html">The HTML body fragment to sanitize.</param>
+    /// <param name="baseUrl">The base URL relative URLs are resolved against. No resolution if empty.</param>
+    /// <returns>The sanitized HTML document.</returns>
+    private IHtmlDocument SanitizeDom(SanitizerPolicy policy, string html, string baseUrl)
     {
-        var parser = HtmlParserFactory();
+        var parser = policy.HtmlParserFactory();
         var dom = parser.ParseDocument("<!doctype html><html><body>" + html);
 
         if (dom.Body != null)
@@ -482,10 +597,10 @@ public class HtmlSanitizer : IHtmlSanitizer
                 if (wrapper == null) continue;
 
                 foreach (var attribute in wrapper.Attributes.ToList())
-                    RemoveAttribute(wrapper, attribute, RemoveReason.NotAllowedAttribute);
+                    RemoveAttribute(policy, wrapper, attribute, RemoveReason.NotAllowedAttribute);
             }
 
-            DoSanitize(dom, dom.Body, baseUrl);
+            DoSanitize(policy, dom, dom.Body, baseUrl);
         }
 
         return dom;
@@ -501,7 +616,7 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <returns>The sanitized HTML document.</returns>
     public IHtmlDocument SanitizeDom(IHtmlDocument document, IHtmlElement? context = null, string baseUrl = "")
     {
-        DoSanitize(document, context ?? (IParentNode)document, baseUrl);
+        DoSanitize(CapturePolicy(), document, context ?? (IParentNode)document, baseUrl);
 
         return document;
     }
@@ -544,7 +659,8 @@ public class HtmlSanitizer : IHtmlSanitizer
     {
         if (context == null) throw new ArgumentNullException(nameof(context));
 
-        var parser = HtmlParserFactory();
+        var policy = CapturePolicy();
+        var parser = policy.HtmlParserFactory();
 
         // An element can only be created through a document, so one is parsed here to create it
         // from. The element contributes only its name, which is all the parser reads to pick an
@@ -567,7 +683,7 @@ public class HtmlSanitizer : IHtmlSanitizer
         if (contextElement is IHtmlUnknownElement)
             throw new ArgumentException($"'{context}' is not a known HTML element.", nameof(context));
 
-        return SanitizeFragment(html, contextElement, baseUrl, outputFormatter, parser);
+        return SanitizeFragment(policy, html, contextElement, baseUrl, outputFormatter, parser);
     }
 
     /// <summary>
@@ -614,11 +730,10 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <paramref name="context"/> is not in the HTML namespace, or is an element whose content is raw text.
     /// </exception>
     public string SanitizeFragment(string html, IElement context, string baseUrl = "", IMarkupFormatter? outputFormatter = null) =>
-        SanitizeFragment(html, context, baseUrl, outputFormatter, parser: null);
+        SanitizeFragment(CapturePolicy(), html, context, baseUrl, outputFormatter, parser: null);
 
     /// <summary>
-    /// Sanitizes a fragment in the context of the given element, optionally with a parser the caller
-    /// has already taken from <see cref="HtmlParserFactory"/>.
+    /// Sanitizes a fragment in the context of the given element under the given policy snapshot.
     /// </summary>
     /// <remarks>
     /// The overload taking a tag name has to build the context element before it can parse the
@@ -626,7 +741,7 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// once per sanitize either way, which matters for a factory that returns a new parser per call
     /// or that counts its calls.
     /// </remarks>
-    private string SanitizeFragment(string html, IElement context, string baseUrl,
+    private string SanitizeFragment(SanitizerPolicy policy, string html, IElement context, string baseUrl,
         IMarkupFormatter? outputFormatter, HtmlParser? parser)
     {
         if (html == null) throw new ArgumentNullException(nameof(html));
@@ -657,7 +772,7 @@ public class HtmlSanitizer : IHtmlSanitizer
                 "Sanitize the fragment in the context it will be rendered as markup in instead.",
                 nameof(context));
 
-        parser ??= HtmlParserFactory();
+        parser ??= policy.HtmlParserFactory();
 
         var nodes = parser.ParseFragment(html, context);
 
@@ -681,9 +796,9 @@ public class HtmlSanitizer : IHtmlSanitizer
         // been rendered from the subtree, which the using scope ensures.
         using var fragmentOwner = parent.Owner;
 
-        DoSanitize(parent, parentNode, baseUrl);
+        DoSanitize(policy, parent, parentNode, baseUrl);
 
-        return parent.ChildNodes.ToHtml(outputFormatter ?? OutputFormatter);
+        return parent.ChildNodes.ToHtml(outputFormatter ?? policy.OutputFormatter);
     }
 
     /// <summary>
@@ -695,12 +810,13 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <returns>The sanitized HTML document.</returns>
     public string SanitizeDocument(string html, string baseUrl = "", IMarkupFormatter? outputFormatter = null)
     {
-        var parser = HtmlParserFactory();
+        var policy = CapturePolicy();
+        var parser = policy.HtmlParserFactory();
         using var dom = parser.ParseDocument(html);
 
-        DoSanitize(dom, dom, baseUrl);
+        DoSanitize(policy, dom, dom, baseUrl);
 
-        var output = dom.ToHtml(outputFormatter ?? OutputFormatter);
+        var output = dom.ToHtml(outputFormatter ?? policy.OutputFormatter);
 
         return output;
     }
@@ -714,12 +830,13 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <returns>The sanitized HTML document.</returns>
     public string SanitizeDocument(Stream html, string baseUrl = "", IMarkupFormatter? outputFormatter = null)
     {
-        var parser = HtmlParserFactory();
+        var policy = CapturePolicy();
+        var parser = policy.HtmlParserFactory();
         using var dom = parser.ParseDocument(html);
 
-        DoSanitize(dom, dom, baseUrl);
+        DoSanitize(policy, dom, dom, baseUrl);
 
-        var output = dom.ToHtml(outputFormatter ?? OutputFormatter);
+        var output = dom.ToHtml(outputFormatter ?? policy.OutputFormatter);
 
         return output;
     }
@@ -727,16 +844,17 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Removes all comment nodes from a list of nodes.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="context">The node within which to remove comments.</param>
     /// <returns><c>true</c> if any comments were removed; otherwise, <c>false</c>.</returns>
-    private void RemoveComments(INode context)
+    private void RemoveComments(SanitizerPolicy policy, INode context)
     {
         foreach (var comment in GetAllNodes(context).OfType<IComment>().ToList())
         {
-            EncodeComment(comment);
+            policy.EncodeComment(comment);
 
             var e = new RemovingCommentEventArgs(comment);
-            OnRemovingComment(e);
+            policy.RemovingComment?.Invoke(this, e);
 
             if (!e.Cancel)
                 comment.Remove();
@@ -759,12 +877,12 @@ public class HtmlSanitizer : IHtmlSanitizer
             tag.SetInnerText(escapedHtml);
     }
 
-    private void DoSanitize(INode dom, IParentNode context, string baseUrl = "", int srcdocDepth = 0)
+    private void DoSanitize(SanitizerPolicy policy, INode dom, IParentNode context, string baseUrl = "", int srcdocDepth = 0)
     {
         // remove disallowed tags
-        foreach (var tag in context.QuerySelectorAll("*").Where(t => !IsAllowedTag(t)).ToList())
+        foreach (var tag in context.QuerySelectorAll("*").Where(t => !IsAllowedTag(policy, t)).ToList())
         {
-            RemoveTag(tag, RemoveReason.NotAllowedTag);
+            RemoveTag(policy, tag, RemoveReason.NotAllowedTag);
         }
 
         // always encode text in raw data content, except in style elements: their content is
@@ -781,48 +899,48 @@ public class HtmlSanitizer : IHtmlSanitizer
                 && t.Flags.HasFlag(NodeFlags.LiteralText)
                 && !string.IsNullOrWhiteSpace(t.InnerHtml)))
         {
-            EncodeLiteralTextElementContent(tag);
+            policy.EncodeLiteralTextElementContent(tag);
         }
 
-        SanitizeStyleSheets(dom, baseUrl);
+        SanitizeStyleSheets(policy, dom, baseUrl);
 
         // cleanup attributes
         foreach (var tag in context.QuerySelectorAll("*").ToList())
         {
             if (tag is IHtmlTemplateElement templateElement && templateElement.Content is IDocumentFragment fragment)
             {
-                DoSanitize(fragment, fragment, baseUrl, srcdocDepth);
+                DoSanitize(policy, fragment, fragment, baseUrl, srcdocDepth);
             }
 
             // remove disallowed attributes
-            foreach (var attribute in tag.Attributes.Where(a => !IsAllowedAttribute(a)).ToList())
+            foreach (var attribute in tag.Attributes.Where(a => !IsAllowedAttribute(policy, a)).ToList())
             {
-                RemoveAttribute(tag, attribute, RemoveReason.NotAllowedAttribute);
+                RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedAttribute);
             }
 
             // sanitize the content of a surviving srcdoc attribute
-            SanitizeSrcdoc(tag, baseUrl, srcdocDepth);
+            SanitizeSrcdoc(policy, tag, baseUrl, srcdocDepth);
 
             // sanitize URLs in URL-marked attributes
-            foreach (var attribute in tag.Attributes.Where(a => IsUriAttribute(a) && !IsUriListAttribute(a)).ToList())
+            foreach (var attribute in tag.Attributes.Where(a => IsUriAttribute(policy, a) && !IsUriListAttribute(policy, a)).ToList())
             {
-                var url = SanitizeUrl(tag, attribute.Value, baseUrl);
+                var url = SanitizeUrl(policy, tag, attribute.Value, baseUrl);
 
                 if (url == null)
-                    RemoveAttribute(tag, attribute, RemoveReason.NotAllowedUrlValue);
+                    RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedUrlValue);
                 else
                     tag.SetAttribute(attribute.Name, url);
             }
 
             // sanitize every entry of attributes holding a list of URLs
-            foreach (var attribute in tag.Attributes.Where(IsUriListAttribute).ToList())
+            foreach (var attribute in tag.Attributes.Where(a => IsUriListAttribute(policy, a)).ToList())
             {
-                SanitizeUriList(tag, attribute, baseUrl);
+                SanitizeUriList(policy, tag, attribute, baseUrl);
             }
 
             // sanitize the style attribute
             var oldStyleEmpty = string.IsNullOrEmpty(tag.GetAttribute(StyleAttributeName));
-            SanitizeStyle(tag, baseUrl);
+            SanitizeStyle(policy, tag, baseUrl);
 
             // sanitize the value of the attributes
             foreach (var attribute in tag.Attributes.ToList())
@@ -831,23 +949,23 @@ public class HtmlSanitizer : IHtmlSanitizer
                 // (see https://www.owasp.org/index.php/XSS_Filter_Evasion_Cheat_Sheet#.26_JavaScript_includes)
                 if (attribute.Value.Contains("&{"))
                 {
-                    RemoveAttribute(tag, attribute, RemoveReason.NotAllowedValue);
+                    RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedValue);
                 }
                 else
                 {
-                    if (AllowedClasses.Any() && attribute.Name == "class")
+                    if (policy.AllowedClasses.Count != 0 && attribute.Name == "class")
                     {
-                        var removedClasses = tag.ClassList.Except(AllowedClasses).ToArray();
+                        var removedClasses = tag.ClassList.Except(policy.AllowedClasses).ToArray();
 
                         foreach (var removedClass in removedClasses)
-                            RemoveCssClass(tag, removedClass, RemoveReason.NotAllowedCssClass);
+                            RemoveCssClass(policy, tag, removedClass, RemoveReason.NotAllowedCssClass);
 
                         if (tag.ClassList.Length == 0)
-                            RemoveAttribute(tag, attribute, RemoveReason.ClassAttributeEmpty);
+                            RemoveAttribute(policy, tag, attribute, RemoveReason.ClassAttributeEmpty);
                     }
                     else if (!oldStyleEmpty && attribute.Name == StyleAttributeName && string.IsNullOrEmpty(attribute.Value))
                     {
-                        RemoveAttribute(tag, attribute, RemoveReason.StyleAttributeEmpty);
+                        RemoveAttribute(policy, tag, attribute, RemoveReason.StyleAttributeEmpty);
                     }
                 }
             }
@@ -855,14 +973,14 @@ public class HtmlSanitizer : IHtmlSanitizer
 
         if (context is INode node)
         {
-            RemoveComments(node);
+            RemoveComments(policy, node);
         }
 
         var doc = dom as IHtmlDocument ?? dom.Owner as IHtmlDocument;
 
         if (doc != null)
         {
-            DoPostProcess(doc, context as INode);
+            DoPostProcess(policy, doc, context as INode);
         }
     }
 
@@ -881,22 +999,22 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// attributes are whitespace-separated and need no such grammar.
     /// </para>
     /// </remarks>
-    private void SanitizeUriList(IElement tag, IAttr attribute, string baseUrl)
+    private void SanitizeUriList(SanitizerPolicy policy, IElement tag, IAttr attribute, string baseUrl)
     {
         var value = attribute.Value;
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            RemoveAttribute(tag, attribute, RemoveReason.NotAllowedUrlValue);
+            RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedUrlValue);
             return;
         }
 
         var sanitized = attribute.Name.Equals(SrcsetAttributeName, StringComparison.OrdinalIgnoreCase)
-            ? SanitizeSrcset(tag, value, baseUrl)
-            : SanitizeUrlList(tag, value, baseUrl);
+            ? SanitizeSrcset(policy, tag, value, baseUrl)
+            : SanitizeUrlList(policy, tag, value, baseUrl);
 
         if (sanitized == null)
-            RemoveAttribute(tag, attribute, RemoveReason.NotAllowedUrlValue);
+            RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedUrlValue);
         else
             tag.SetAttribute(attribute.Name, sanitized);
     }
@@ -905,7 +1023,7 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// Screens each candidate of a <c>srcset</c> value, preserving the descriptor that belongs to
     /// each surviving URL. Returns null when no candidate survives.
     /// </summary>
-    private string? SanitizeSrcset(IElement tag, string value, string baseUrl)
+    private string? SanitizeSrcset(SanitizerPolicy policy, IElement tag, string value, string baseUrl)
     {
         var kept = new List<string>();
 
@@ -915,7 +1033,7 @@ public class HtmlSanitizer : IHtmlSanitizer
 
             if (candidateUrl == null || candidateUrl.Length == 0) continue;
 
-            var url = SanitizeUrl(tag, candidateUrl, baseUrl);
+            var url = SanitizeUrl(policy, tag, candidateUrl, baseUrl);
 
             if (url == null) continue;
 
@@ -931,13 +1049,13 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// Screens each entry of a whitespace-separated URL list such as <c>ping</c> or
     /// <c>archive</c>. Returns null when no entry survives.
     /// </summary>
-    private string? SanitizeUrlList(IElement tag, string value, string baseUrl)
+    private string? SanitizeUrlList(SanitizerPolicy policy, IElement tag, string value, string baseUrl)
     {
         var kept = new List<string>();
 
         foreach (var entry in value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
         {
-            var url = SanitizeUrl(tag, entry, baseUrl);
+            var url = SanitizeUrl(policy, tag, entry, baseUrl);
 
             if (url != null) kept.Add(url);
         }
@@ -958,7 +1076,7 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// HTML with this same sanitizer, so the nested document is held to exactly the policy the
     /// outer one is.
     /// </remarks>
-    private void SanitizeSrcdoc(IElement tag, string baseUrl, int srcdocDepth)
+    private void SanitizeSrcdoc(SanitizerPolicy policy, IElement tag, string baseUrl, int srcdocDepth)
     {
         var attribute = tag.Attributes.FirstOrDefault(a =>
             a.Name.Equals(SrcdocAttributeName, StringComparison.OrdinalIgnoreCase));
@@ -971,31 +1089,31 @@ public class HtmlSanitizer : IHtmlSanitizer
         // point, so keeping it would be keeping something unsanitized.
         if (srcdocDepth >= MaxSrcdocDepth)
         {
-            RemoveAttribute(tag, attribute, RemoveReason.NotAllowedValue);
+            RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedValue);
             return;
         }
 
-        var parser = HtmlParserFactory();
+        var parser = policy.HtmlParserFactory();
         using var nested = parser.ParseDocument("<!doctype html><html><body>" + attribute.Value);
 
         if (nested.Body == null)
         {
-            RemoveAttribute(tag, attribute, RemoveReason.NotAllowedValue);
+            RemoveAttribute(policy, tag, attribute, RemoveReason.NotAllowedValue);
             return;
         }
 
-        DoSanitize(nested, nested.Body, baseUrl, srcdocDepth + 1);
+        DoSanitize(policy, nested, nested.Body, baseUrl, srcdocDepth + 1);
 
-        tag.SetAttribute(attribute.Name, nested.Body.ChildNodes.ToHtml(OutputFormatter));
+        tag.SetAttribute(attribute.Name, nested.Body.ChildNodes.ToHtml(policy.OutputFormatter));
     }
 
-    private void SanitizeStyleSheets(INode node, string baseUrl)
+    private void SanitizeStyleSheets(SanitizerPolicy policy, INode node, string baseUrl)
     {
         var handled = new HashSet<IElement>();
 
         foreach (var styleSheet in node.GetStyleSheets().OfType<ICssStyleSheet>())
         {
-            SanitizeStyleSheet(styleSheet, styleSheet.OwnerNode, baseUrl);
+            SanitizeStyleSheet(policy, styleSheet, styleSheet.OwnerNode, baseUrl);
             handled.Add(styleSheet.OwnerNode);
         }
 
@@ -1015,11 +1133,11 @@ public class HtmlSanitizer : IHtmlSanitizer
 
         foreach (var styleTag in parent.QuerySelectorAll(StyleTagName).Where(t => !handled.Contains(t)).ToList())
         {
-            var reparsed = HtmlParserFactory().ParseDocument($"<style>{styleTag.TextContent}</style>");
+            var reparsed = policy.HtmlParserFactory().ParseDocument($"<style>{styleTag.TextContent}</style>");
             var styleSheet = reparsed.GetStyleSheets().OfType<ICssStyleSheet>().FirstOrDefault();
 
             if (styleSheet != null)
-                SanitizeStyleSheet(styleSheet, styleTag, baseUrl);
+                SanitizeStyleSheet(policy, styleSheet, styleTag, baseUrl);
             else
                 // A type-less <style> tag should always yield a stylesheet; if it somehow doesn't,
                 // fail closed rather than leaving the original, unsanitized content in place.
@@ -1027,35 +1145,36 @@ public class HtmlSanitizer : IHtmlSanitizer
         }
     }
 
-    private void SanitizeStyleSheet(ICssStyleSheet styleSheet, IElement styleTag, string baseUrl)
+    private void SanitizeStyleSheet(SanitizerPolicy policy, ICssStyleSheet styleSheet, IElement styleTag, string baseUrl)
     {
         var i = 0;
 
         while (i < styleSheet.Rules.Length)
         {
             var rule = styleSheet.Rules[i];
-            if (!SanitizeStyleRule(rule, styleTag, baseUrl) && RemoveAtRule(styleTag, rule))
+            if (!SanitizeStyleRule(policy, rule, styleTag, baseUrl) && RemoveAtRule(policy, styleTag, rule))
                 styleSheet.RemoveAt(i);
             else i++;
         }
 
-        styleTag.InnerHtml = styleSheet.ToCss(StyleFormatter).Replace("<", "\\3c ");
+        styleTag.InnerHtml = styleSheet.ToCss(policy.StyleFormatter).Replace("<", "\\3c ");
     }
 
-    private bool SanitizeStyleRule(ICssRule rule, IElement styleTag, string baseUrl)
+    private bool SanitizeStyleRule(SanitizerPolicy policy, ICssRule rule, IElement styleTag, string baseUrl)
     {
-        if (!AllowedAtRules.Contains(rule.Type)) return false;
+        if (!policy.AllowedAtRules.Contains(rule.Type)) return false;
 
-        if (FilterCssRule != null)
+        if (policy.FilterCssRule != null)
         {
             var e = new FilterCssRuleEventArgs(styleTag, rule, baseUrl);
-            if (!OnFilteringCssRule(e))
+            policy.FilterCssRule.Invoke(this, e);
+            if (e.Cancel)
                 return false;
         }
 
         if (rule is ICssStyleRule styleRule)
         {
-            SanitizeStyleDeclaration(styleTag, styleRule.Style, baseUrl);
+            SanitizeStyleDeclaration(policy, styleTag, styleRule.Style, baseUrl);
         }
         else
         {
@@ -1066,19 +1185,19 @@ public class HtmlSanitizer : IHtmlSanitizer
                 while (i < groupingRule.Rules.Length)
                 {
                     var childRule = groupingRule.Rules[i];
-                    if (!SanitizeStyleRule(childRule, styleTag, baseUrl) && RemoveAtRule(styleTag, childRule))
+                    if (!SanitizeStyleRule(policy, childRule, styleTag, baseUrl) && RemoveAtRule(policy, styleTag, childRule))
                         groupingRule.RemoveAt(i);
                     else i++;
                 }
             }
             else if (rule is ICssPageRule pageRule)
             {
-                SanitizeStyleDeclaration(styleTag, pageRule.Style, baseUrl);
+                SanitizeStyleDeclaration(policy, styleTag, pageRule.Style, baseUrl);
             }
             else if (rule is ICssKeyframesRule keyFramesRule)
             {
                 foreach (var childRule in keyFramesRule.Rules.OfType<ICssKeyframeRule>()
-                    .Where(r => !SanitizeStyleRule(r, styleTag, baseUrl) && RemoveAtRule(styleTag, r))
+                    .Where(r => !SanitizeStyleRule(policy, r, styleTag, baseUrl) && RemoveAtRule(policy, styleTag, r))
                     .ToList())
                 {
                     keyFramesRule.Remove(childRule.KeyText);
@@ -1086,18 +1205,18 @@ public class HtmlSanitizer : IHtmlSanitizer
             }
             else if (rule is ICssKeyframeRule keyFrameRule)
             {
-                SanitizeStyleDeclaration(styleTag, keyFrameRule.Style, baseUrl);
+                SanitizeStyleDeclaration(policy, styleTag, keyFrameRule.Style, baseUrl);
             }
             else if (rule is ICssFontFaceRule fontFaceRule)
             {
-                return SanitizeFontFaceRule(styleTag, fontFaceRule, baseUrl);
+                return SanitizeFontFaceRule(policy, styleTag, fontFaceRule, baseUrl);
             }
             else if (rule is ICssImportRule importRule)
             {
                 // The browser fetches the imported style sheet, so its URL has to clear the same
                 // scheme check as any other. The rule is not rewritten - that would mean rebuilding
                 // its text and re-escaping the URL - so one that does not pass is dropped instead.
-                return SanitizeUrl(styleTag, importRule.Href, baseUrl) != null;
+                return SanitizeUrl(policy, styleTag, importRule.Href, baseUrl) != null;
             }
         }
 
@@ -1120,20 +1239,21 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// source has been taken away is of no use, so anything unacceptable removes the whole rule.
     /// </para>
     /// </remarks>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="styleTag">The style element the rule belongs to.</param>
     /// <param name="fontFaceRule">The rule to sanitize.</param>
     /// <param name="baseUrl">The base URL relative URLs are resolved against.</param>
     /// <returns><c>true</c> if the rule can be kept; otherwise, <c>false</c>.</returns>
-    private bool SanitizeFontFaceRule(IElement styleTag, ICssFontFaceRule fontFaceRule, string baseUrl)
+    private bool SanitizeFontFaceRule(SanitizerPolicy policy, IElement styleTag, ICssFontFaceRule fontFaceRule, string baseUrl)
     {
         // Materialized because the declarations are updated while going through them.
         foreach (var property in ((IEnumerable<ICssProperty>)fontFaceRule).ToList())
         {
-            if (!IsAllowedCssProperty(DecodeCss(property.Name)))
+            if (!IsAllowedCssProperty(policy, DecodeCss(property.Name)))
                 return false;
 
             var value = DecodeCss(property.Value);
-            var sanitized = SanitizeCssValue(styleTag, value, baseUrl, out _);
+            var sanitized = SanitizeCssValue(policy, styleTag, value, baseUrl, out _);
 
             if (sanitized == null)
                 return false;
@@ -1148,11 +1268,12 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Performs post processing on all nodes in the document.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="dom">The HTML document.</param>
     /// <param name="context">The node within which to post process all nodes.</param>
-    private void DoPostProcess(IHtmlDocument dom, INode? context)
+    private void DoPostProcess(SanitizerPolicy policy, IHtmlDocument dom, INode? context)
     {
-        if (PostProcessNode != null)
+        if (policy.PostProcessNode != null)
         {
             dom.Normalize();
 
@@ -1162,7 +1283,7 @@ public class HtmlSanitizer : IHtmlSanitizer
                 foreach (var node in nodes)
                 {
                     var e = new PostProcessNodeEventArgs(dom, node);
-                    OnPostProcessNode(e);
+                    policy.PostProcessNode.Invoke(this, e);
                     if (e.ReplacementNodes.Count != 0)
                     {
                         ((IChildNode)node).Replace([.. e.ReplacementNodes]);
@@ -1171,48 +1292,51 @@ public class HtmlSanitizer : IHtmlSanitizer
             }
         }
 
-        if (PostProcessDom != null)
+        if (policy.PostProcessDom != null)
         {
             var e = new PostProcessDomEventArgs(dom);
-            OnPostProcessDom(e);
+            policy.PostProcessDom.Invoke(this, e);
         }
     }
 
     /// <summary>
     /// Determines whether the specified attribute can contain a URI.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="attribute">The attribute.</param>
     /// <returns><c>true</c> if the attribute can contain a URI; otherwise, <c>false</c>.</returns>
-    private bool IsUriAttribute(IAttr attribute)
+    private static bool IsUriAttribute(SanitizerPolicy policy, IAttr attribute)
     {
-        return UriAttributes.Contains(attribute.Name);
+        return policy.UriAttributes.Contains(attribute.Name);
     }
 
-    private bool IsUriListAttribute(IAttr attribute)
+    private static bool IsUriListAttribute(SanitizerPolicy policy, IAttr attribute)
     {
-        return UriListAttributes.Contains(attribute.Name);
+        return policy.UriListAttributes.Contains(attribute.Name);
     }
 
     /// <summary>
     /// Determines whether the specified tag is allowed.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="tag">The tag.</param>
     /// <returns><c>true</c> if the tag is allowed; otherwise, <c>false</c>.</returns>
-    private bool IsAllowedTag(IElement tag)
+    private static bool IsAllowedTag(SanitizerPolicy policy, IElement tag)
     {
-        return AllowedTags.Contains(tag.NodeName);
+        return policy.AllowedTags.Contains(tag.NodeName);
     }
 
     /// <summary>
     /// Determines whether the specified attribute is allowed.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="attribute">The attribute.</param>
     /// <returns><c>true</c> if the attribute is allowed; otherwise, <c>false</c>.</returns>
-    private bool IsAllowedAttribute(IAttr attribute)
+    private static bool IsAllowedAttribute(SanitizerPolicy policy, IAttr attribute)
     {
-        return AllowedAttributes.Contains(attribute.Name)
+        return policy.AllowedAttributes.Contains(attribute.Name)
             // test html5 data- attributes
-            || (AllowDataAttributes && attribute.Name != null && attribute.Name.StartsWith("data-", StringComparison.OrdinalIgnoreCase));
+            || (policy.AllowDataAttributes && attribute.Name != null && attribute.Name.StartsWith("data-", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1220,7 +1344,16 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// </summary>
     /// <param name="element">The element.</param>
     /// <param name="baseUrl">The base URL.</param>
-    protected void SanitizeStyle(IElement element, string baseUrl)
+    protected void SanitizeStyle(IElement element, string baseUrl) =>
+        SanitizeStyle(CapturePolicy(), element, baseUrl);
+
+    /// <summary>
+    /// Sanitizes the style under the given policy snapshot.
+    /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
+    /// <param name="element">The element.</param>
+    /// <param name="baseUrl">The base URL.</param>
+    private void SanitizeStyle(SanitizerPolicy policy, IElement element, string baseUrl)
     {
         // filter out invalid CSS declarations
         // see https://github.com/AngleSharp/AngleSharp/issues/101
@@ -1234,13 +1367,13 @@ public class HtmlSanitizer : IHtmlSanitizer
             return;
         }
 
-        element.SetAttribute(StyleAttributeName, element.GetStyle().ToCss(StyleFormatter));
+        element.SetAttribute(StyleAttributeName, element.GetStyle().ToCss(policy.StyleFormatter));
 
         var styles = element.GetStyle();
         if (styles == null || styles.Length == 0)
             return;
 
-        SanitizeStyleDeclaration(element, styles, baseUrl);
+        SanitizeStyleDeclaration(policy, element, styles, baseUrl);
     }
 
     /// <summary>
@@ -1248,15 +1381,34 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// check if the property is in the <see cref="AllowedCssProperties"/> set,
     /// or if the property is a custom property and <see cref="AllowCssCustomProperties"/> is true.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline does not go through this method: it checks the policy snapshot
+    /// captured when the call was entered instead, so that one call always observes a single
+    /// version of the configuration. This method remains for callers that ask directly, and
+    /// reads the live configuration like it always has.
+    /// </remarks>
     /// <param name="propertyName">The name of the CSS property.</param>
     /// <returns>True if the property is allowed or not.</returns>
     protected virtual bool IsAllowedCssProperty(string propertyName)
     {
-        return AllowedCssProperties.Contains(propertyName)
-            || AllowCssCustomProperties && propertyName != null && propertyName.StartsWith("--");
+        return IsAllowedCssProperty(AllowedCssProperties, AllowCssCustomProperties, propertyName);
     }
 
-    private void SanitizeStyleDeclaration(IElement element, ICssStyleDeclaration styles, string baseUrl)
+    /// <summary>
+    /// Checks a CSS property name against a captured allowed set. Shared by the snapshot-based
+    /// pipeline and the live-configuration <see cref="IsAllowedCssProperty(string)"/> so the two
+    /// can never drift apart.
+    /// </summary>
+    private static bool IsAllowedCssProperty(ISet<string> allowedCssProperties, bool allowCssCustomProperties, string propertyName)
+    {
+        return allowedCssProperties.Contains(propertyName)
+            || allowCssCustomProperties && propertyName != null && propertyName.StartsWith("--");
+    }
+
+    private static bool IsAllowedCssProperty(SanitizerPolicy policy, string propertyName) =>
+        IsAllowedCssProperty(policy.AllowedCssProperties, policy.AllowCssCustomProperties, propertyName);
+
+    private void SanitizeStyleDeclaration(SanitizerPolicy policy, IElement element, ICssStyleDeclaration styles, string baseUrl)
     {
         var pending = GetPendingShorthands(styles);
         var covered = pending.Count == 0 ? null
@@ -1277,10 +1429,10 @@ public class HtmlSanitizer : IHtmlSanitizer
             var key = DecodeCss(rawName);
             var val = DecodeCss(rawValue);
 
-            if (!IsAllowedCssProperty(key))
+            if (!IsAllowedCssProperty(policy, key))
                 return (property, RemoveReason.NotAllowedStyle, null, null);
 
-            var sanitized = SanitizeCssValue(element, val, baseUrl, out var reason);
+            var sanitized = SanitizeCssValue(policy, element, val, baseUrl, out var reason);
 
             if (sanitized == null)
                 return (property, reason, null, null);
@@ -1328,7 +1480,7 @@ public class HtmlSanitizer : IHtmlSanitizer
         foreach (var style in removeStyles)
         {
             var e = new RemovingStyleEventArgs(element, style.Item1, style.Item2);
-            OnRemovingStyle(e);
+            policy.RemovingStyle?.Invoke(this, e);
 
             if (!e.Cancel)
                 removedNames.Add(style.Item1.Name);
@@ -1379,14 +1531,15 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Applies the value level checks to a single declaration value.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="element">The element the declaration belongs to.</param>
     /// <param name="value">The decoded declaration value.</param>
     /// <param name="baseUrl">The base URL relative URLs are resolved against.</param>
     /// <param name="reason">The reason the declaration has to be removed, if it has to be.</param>
     /// <returns>The value to keep, with any URLs rewritten, or <c>null</c> if the declaration must be removed.</returns>
-    private string? SanitizeCssValue(IElement element, string value, string baseUrl, out RemoveReason reason)
+    private string? SanitizeCssValue(SanitizerPolicy policy, IElement element, string value, string baseUrl, out RemoveReason reason)
     {
-        if (CssExpression.IsMatch(value) || DisallowCssPropertyValue.IsMatch(value))
+        if (CssExpression.IsMatch(value) || policy.DisallowCssPropertyValue.IsMatch(value))
         {
             reason = RemoveReason.NotAllowedValue;
             return null;
@@ -1403,7 +1556,7 @@ public class HtmlSanitizer : IHtmlSanitizer
             .Select(m => (Match: m, Url: WhitespaceRegex.Replace(m.Groups[2].Value, string.Empty)))
             // An empty url() has nothing to resolve or to validate, leave it alone.
             .Where(u => u.Url.Length > 0)
-            .Select(u => (u.Match, Url: SanitizeUrl(element, u.Url, baseUrl)))
+            .Select(u => (u.Match, Url: SanitizeUrl(policy, element, u.Url, baseUrl)))
             .ToList();
 
         if (urls.Count == 0)
@@ -1569,9 +1722,22 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Tries to create a safe <see cref="Iri"/> object from a string.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline does not go through this method: it checks the policy snapshot
+    /// captured when the call was entered instead, so that one call always observes a single
+    /// version of the configuration. This method remains for callers that ask directly, and
+    /// reads the live configuration like it always has.
+    /// </remarks>
     /// <param name="url">The URL.</param>
     /// <returns>The <see cref="Iri"/> object or null if no safe <see cref="Iri"/> can be created.</returns>
-    protected Iri? GetSafeIri(string url)
+    protected Iri? GetSafeIri(string url) => GetSafeIri(AllowedSchemes, url);
+
+    /// <summary>
+    /// Tries to create a safe <see cref="Iri"/> object from a string, checking the scheme against
+    /// a captured allowed set. Shared by the snapshot-based pipeline and the live-configuration
+    /// <see cref="GetSafeIri(string)"/> so the two can never drift apart.
+    /// </summary>
+    private static Iri? GetSafeIri(ISet<string> allowedSchemes, string url)
     {
         url = url.TrimStart();
 
@@ -1580,7 +1746,7 @@ public class HtmlSanitizer : IHtmlSanitizer
         if (schemeMatch.Success)
         {
             var scheme = schemeMatch.Groups[1].Value;
-            return AllowedSchemes.Contains(scheme, StringComparer.OrdinalIgnoreCase) ? new Iri(url, scheme) : null;
+            return allowedSchemes.Contains(scheme, StringComparer.OrdinalIgnoreCase) ? new Iri(url, scheme) : null;
         }
 
         return new Iri(url);
@@ -1589,13 +1755,26 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Sanitizes a URL.
     /// </summary>
+    /// <remarks>
+    /// The sanitize pipeline does not go through this method: it works on the policy snapshot
+    /// captured when the call was entered instead, so that one call always observes a single
+    /// version of the configuration and a single list of <see cref="FilterUrl"/> handlers.
+    /// This method remains for callers that ask directly; it captures a fresh snapshot and so
+    /// behaves exactly as it did on the live configuration.
+    /// </remarks>
     /// <param name="element">The tag containing the URL being sanitized.</param>
     /// <param name="url">The URL.</param>
     /// <param name="baseUrl">The base URL relative URLs are resolved against (empty or null for no resolution).</param>
     /// <returns>The sanitized URL or <c>null</c> if no safe URL can be created.</returns>
-    protected virtual string? SanitizeUrl(IElement element, string url, string baseUrl)
+    protected virtual string? SanitizeUrl(IElement element, string url, string baseUrl) =>
+        SanitizeUrl(CapturePolicy(), element, url, baseUrl);
+
+    /// <summary>
+    /// Sanitizes a URL under the given policy snapshot.
+    /// </summary>
+    private string? SanitizeUrl(SanitizerPolicy policy, IElement element, string url, string baseUrl)
     {
-        var iri = GetSafeIri(url);
+        var iri = GetSafeIri(policy.AllowedSchemes, url);
 
         if (iri != null && !iri.IsAbsolute && !string.IsNullOrEmpty(baseUrl))
         {
@@ -1606,7 +1785,7 @@ public class HtmlSanitizer : IHtmlSanitizer
                 {
                     var resolvedUri = new Uri(baseUri, iri.Value);
 
-                    if (!AllowedSchemes.Contains(resolvedUri.Scheme, StringComparer.OrdinalIgnoreCase))
+                    if (!policy.AllowedSchemes.Contains(resolvedUri.Scheme, StringComparer.OrdinalIgnoreCase))
                     {
                         iri = null;
                     }
@@ -1615,7 +1794,7 @@ public class HtmlSanitizer : IHtmlSanitizer
                         var sanitizedUrl = resolvedUri.AbsoluteUri;
                         var ev = new FilterUrlEventArgs(element, url, sanitizedUrl);
 
-                        OnFilteringUrl(ev);
+                        policy.FilterUrl?.Invoke(this, ev);
 
                         return ev.SanitizedUrl;
                     }
@@ -1629,7 +1808,7 @@ public class HtmlSanitizer : IHtmlSanitizer
         }
 
         var e = new FilterUrlEventArgs(element, url, iri?.Value);
-        OnFilteringUrl(e);
+        policy.FilterUrl?.Invoke(this, e);
 
         return e.SanitizedUrl;
     }
@@ -1637,16 +1816,17 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Removes a tag from the document.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="tag">Tag to be removed.</param>
     /// <param name="reason">Reason for removal.</param>
-    private void RemoveTag(IElement tag, RemoveReason reason)
+    private void RemoveTag(SanitizerPolicy policy, IElement tag, RemoveReason reason)
     {
         var e = new RemovingTagEventArgs(tag, reason);
-        OnRemovingTag(e);
+        policy.RemovingTag?.Invoke(this, e);
 
         if (!e.Cancel)
         {
-            if (KeepChildNodes && tag.HasChildNodes)
+            if (policy.KeepChildNodes && tag.HasChildNodes)
                 tag.Replace([.. tag.ChildNodes]);
             else
                 tag.Remove();
@@ -1656,13 +1836,14 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Removes an attribute from the document.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="tag">Tag the attribute belongs to.</param>
     /// <param name="attribute">Attribute to be removed.</param>
     /// <param name="reason">Reason for removal.</param>
-    private void RemoveAttribute(IElement tag, IAttr attribute, RemoveReason reason)
+    private void RemoveAttribute(SanitizerPolicy policy, IElement tag, IAttr attribute, RemoveReason reason)
     {
         var e = new RemovingAttributeEventArgs(tag, attribute, reason);
-        OnRemovingAttribute(e);
+        policy.RemovingAttribute?.Invoke(this, e);
 
         if (!e.Cancel)
             tag.RemoveAttribute(attribute.Name);
@@ -1671,13 +1852,14 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Removes an at-rule from the document.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="tag">Tag the style belongs to.</param>
     /// <param name="rule">Rule to be removed.</param>
     /// <returns><c>true</c>, if the rule can be removed; <c>false</c>, otherwise.</returns>
-    private bool RemoveAtRule(IElement tag, ICssRule rule)
+    private bool RemoveAtRule(SanitizerPolicy policy, IElement tag, ICssRule rule)
     {
         var e = new RemovingAtRuleEventArgs(tag, rule);
-        OnRemovingAtRule(e);
+        policy.RemovingAtRule?.Invoke(this, e);
 
         return !e.Cancel;
     }
@@ -1685,13 +1867,14 @@ public class HtmlSanitizer : IHtmlSanitizer
     /// <summary>
     /// Removes a CSS class from a class attribute.
     /// </summary>
+    /// <param name="policy">The policy snapshot this call sanitizes under.</param>
     /// <param name="tag">Tag the style belongs to.</param>
     /// <param name="cssClass">Class to be removed.</param>
     /// <param name="reason">Reason for removal.</param>
-    private void RemoveCssClass(IElement tag, string cssClass, RemoveReason reason)
+    private void RemoveCssClass(SanitizerPolicy policy, IElement tag, string cssClass, RemoveReason reason)
     {
         var e = new RemovingCssClassEventArgs(tag, cssClass, reason);
-        OnRemovingCssClass(e);
+        policy.RemovingCssClass?.Invoke(this, e);
 
         if (!e.Cancel)
             tag.ClassList.Remove(cssClass);
